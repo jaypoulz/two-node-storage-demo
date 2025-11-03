@@ -80,7 +80,9 @@ $ kubectl-linstor storage-pool list
 ```
 
 **Post-Test Impact**:
-After the node is restarted, the storage pool transitions to an Error state instead of recovering, preventing any further PVC provisioning:
+This impact is **inconsistent** across test runs. Sometimes the storage pool recovers normally, other times it transitions to an Error state preventing further PVC provisioning.
+
+When the error occurs:
 
 ```
 $ kubectl-linstor storage-pool list
@@ -96,7 +98,17 @@ Description:
     Node: 'master-0', storage pool: 'vg1-thin' - Failed to query free space from storage pool
 ```
 
-The storage pool requires manual intervention or node restart to recover.
+When storage recovers successfully (inconsistent behavior):
+
+```
+$ kubectl-linstor storage-pool list
+╭─────────────────────────────────────────────────────────────────────────────────────────────────╮
+┊ StoragePool  ┊ Node     ┊ Driver   ┊ PoolName     ┊ FreeCapacity ┊ TotalCapacity ┊ State ┊
+╞═════════════════════════════════════════════════════════════════════════════════════════════════╡
+┊ vg1-thin     ┊ master-0 ┊ LVM_THIN ┊ vg1/vg1-thin ┊    59.87 GiB ┊     59.88 GiB ┊ Ok    ┊
+┊ vg1-thin     ┊ master-1 ┊ LVM_THIN ┊ vg1/vg1-thin ┊    59.87 GiB ┊     59.88 GiB ┊ Ok    ┊
+╰─────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
 
 **Workaround**:
 - Use "Cordon/Drain" mode instead, which properly migrates workloads before shutdown
@@ -121,7 +133,9 @@ The storage pool requires manual intervention or node restart to recover.
 Pod migration succeeds and storage remounts on surviving node during the test.
 
 **Post-Test Impact**:
-After running this test, same issue as Test 2 (Graceful Shutdown) - the storage pool on the destroyed node remains in an error state and prevents new PVC provisioning:
+This impact is **inconsistent** across test runs, same as Test 2 (Graceful Shutdown). Sometimes the storage pool recovers normally after node restart, other times it remains in an error state preventing new PVC provisioning.
+
+When the error occurs:
 
 ```
 $ kubectl-linstor storage-pool list
@@ -139,9 +153,22 @@ Description:
 
 This prevents new PVC provisioning due to insufficient available nodes for `autoPlace: 2`.
 
+When storage recovers successfully (inconsistent behavior):
+
+```
+$ kubectl-linstor storage-pool list
+╭─────────────────────────────────────────────────────────────────────────────────────────────────╮
+┊ StoragePool  ┊ Node     ┊ Driver   ┊ PoolName     ┊ FreeCapacity ┊ TotalCapacity ┊ State ┊
+╞═════════════════════════════════════════════════════════════════════════════════════════════════╡
+┊ vg1-thin     ┊ master-0 ┊ LVM_THIN ┊ vg1/vg1-thin ┊    59.87 GiB ┊     59.88 GiB ┊ Ok    ┊
+┊ vg1-thin     ┊ master-1 ┊ LVM_THIN ┊ vg1/vg1-thin ┊    59.87 GiB ┊     59.88 GiB ┊ Ok    ┊
+╰─────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 **Notes**:
-- Similar to Test 2, the storage pool requires manual intervention after node recovery
-- A timing issue (observed in Test 2) may also affect this scenario where LINSTOR doesn't fully detect and recover from the node failure
+- The inconsistent behavior suggests a race condition in LINSTOR's node recovery process
+- Similar timing issues observed in Test 2 may affect this scenario
+- When recovery fails, manual intervention is required
 
 **Workaround**:
 - Restore the VM and wait for node to rejoin cluster
